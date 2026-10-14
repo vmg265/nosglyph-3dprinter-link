@@ -105,6 +105,9 @@ fun GlyphMatrixView(
 
                 for (y in 0 until matrixSize) {
                     for (x in 0 until matrixSize) {
+                        if (!com.example.bambuglyph.glyph.GlyphMatrixRenderer.isInsideCircularMatrix(x, y, matrixSize)) {
+                            continue
+                        }
                         val index = y * matrixSize + x
                         val brightness = if (index in matrixData.indices) matrixData[index].coerceIn(0, 255) else 0
 

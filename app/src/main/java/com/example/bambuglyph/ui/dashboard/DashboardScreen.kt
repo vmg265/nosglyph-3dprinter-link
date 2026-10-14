@@ -98,6 +98,12 @@ fun DashboardScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
     var previewSizeOverride by remember { mutableStateOf<Int?>(null) }
 
+    // 5-tap hidden demo mode toggle in header
+    var headerTapCount by remember { mutableStateOf(0) }
+    var lastTapTime by remember { mutableStateOf(0L) }
+    var demoUnlocked by remember { mutableStateOf(config.mockMode) }
+    var feedbackMsg by remember { mutableStateOf<String?>(null) }
+
     val activeSize = previewSizeOverride ?: matrixSize
     // If override changed size, generate preview frame
     val displayFrame = if (previewSizeOverride != null && previewSizeOverride != matrixSize) {
@@ -124,9 +130,31 @@ fun DashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(
+                    modifier = Modifier.clickable {
+                        val now = System.currentTimeMillis()
+                        if (now - lastTapTime > 2000L) {
+                            headerTapCount = 0
+                        }
+                        lastTapTime = now
+                        headerTapCount++
+                        if (headerTapCount >= 5) {
+                            headerTapCount = 0
+                            val newMode = !demoUnlocked
+                            demoUnlocked = newMode
+                            val updated = config.copy(mockMode = newMode)
+                            prefs.savePrinterConfig(updated)
+                            PrinterRepository.updateConfig(updated)
+                            feedbackMsg = if (newMode) "DEMO MODE UNLOCKED" else "DEMO MODE DISABLED"
+                            if (isRunning) {
+                                PrinterForegroundService.stop(context)
+                                PrinterForegroundService.start(context)
+                            }
+                        }
+                    }
+                ) {
                     Text(
-                        text = "BAMBU X2D",
+                        text = "3D PRINTER",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
@@ -134,19 +162,29 @@ fun DashboardScreen(
                         )
                     )
                     Text(
-                        text = if (config.mockMode) "DEMO SIMULATOR" else config.serialNumber,
+                        text = if (demoUnlocked) "DEMO SIMULATOR" else if (config.serialNumber.isNotBlank()) config.serialNumber else "MONITOR",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = FontFamily.Monospace,
-                            color = TextMuted
+                            color = if (demoUnlocked) NothingRed else TextMuted
                         )
                     )
+                    if (feedbackMsg != null) {
+                        Text(
+                            text = feedbackMsg ?: "",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                color = NothingRed,
+                                letterSpacing = 1.sp
+                            )
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Status Badge
                     ConnectionBadge(
                         isConnected = status.isConnected,
-                        isMock = config.mockMode
+                        isMock = demoUnlocked
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -272,17 +310,18 @@ fun DashboardScreen(
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Demo / Test States Section (Always available for testing LED animations!)
-            DemoTestSection(
-                onSelectState = { state ->
-                    if (!isRunning) {
-                        PrinterForegroundService.start(context)
+            // Demo / Test States Section (Hidden by default; unlocked by tapping header 5 times)
+            if (demoUnlocked) {
+                Spacer(modifier = Modifier.height(24.dp))
+                DemoTestSection(
+                    onSelectState = { state ->
+                        if (!isRunning) {
+                            PrinterForegroundService.start(context)
+                        }
+                        PrinterForegroundService.setDemoState(context, state)
                     }
-                    PrinterForegroundService.setDemoState(context, state)
-                }
-            )
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -417,7 +456,7 @@ private fun PrintStateCard(status: com.example.bambuglyph.model.PrinterStatus) {
 
             // Subtask Name
             Text(
-                text = if (status.subtaskName.isNotBlank()) status.subtaskName else "bambu_model.gcode",
+                text = if (status.subtaskName.isNotBlank()) status.subtaskName else "3d_model.gcode",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontFamily = FontFamily.Monospace,
                     color = TextSecondary
@@ -561,13 +600,13 @@ private fun DemoTestSection(onSelectState: (PrintState) -> Unit) {
                 DemoButton("PH", "PREHEAT", Modifier.weight(1f)) {
                     onSelectState(PrintState.PREHEAT)
                 }
-                DemoButton("45m", "PRINT", Modifier.weight(1f)) {
+                DemoButton("75%", "PRINT", Modifier.weight(1f)) {
                     onSelectState(PrintState.PRINTING)
                 }
                 DemoButton("||", "PAUSE", Modifier.weight(1f)) {
                     onSelectState(PrintState.PAUSED)
                 }
-                DemoButton("✔", "100%", Modifier.weight(1f)) {
+                DemoButton("TICK", "100%", Modifier.weight(1f)) {
                     onSelectState(PrintState.COMPLETED)
                 }
             }
@@ -670,42 +709,6 @@ private fun SettingsSheetContent(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Mock mode switch
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(NothingBlack)
-                .border(1.dp, BorderDark, RoundedCornerShape(8.dp))
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "DEMO / MOCK MODE",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                        color = if (mockMode) NothingRed else TextPrimary
-                    )
-                )
-                Text(
-                    text = "Test matrix without local printer connection",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextMuted)
-                )
-            }
-            Switch(
-                checked = mockMode,
-                onCheckedChange = { mockMode = it },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = NothingWhite,
-                    checkedTrackColor = NothingRed
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
 
         OutlinedTextField(
             value = ip,

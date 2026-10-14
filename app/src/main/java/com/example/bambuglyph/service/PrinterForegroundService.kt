@@ -183,7 +183,7 @@ class PrinterForegroundService : Service() {
         )
 
         return NotificationCompat.Builder(this, BambuGlyphApp.CHANNEL_ID)
-            .setContentTitle("Bambu X2D Glyph Monitor")
+            .setContentTitle("3D Printer Glyph Monitor")
             .setContentText(text)
             .setSmallIcon(R.drawable.img_toy_preview)
             .setOngoing(true)

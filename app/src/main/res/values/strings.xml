@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">Bambu Glyph</string>
-    <string name="toy_name">Bambu X2D Monitor</string>
+    <string name="app_name">Glyph 3D Monitor</string>
+    <string name="toy_name">Print Matrix</string>
     <string name="toy_summary">Live 3D print status, preheat, progress, and finish alerts on Nothing Glyph Matrix</string>
     <string name="channel_name">3D Printer Glyph Monitor</string>
-    <string name="channel_desc">Background synchronization of Bambu 3D printer status to Nothing Phone Glyph Matrix</string>
+    <string name="channel_desc">Background synchronization of 3D printer status to Nothing Phone Glyph Matrix</string>
 </resources>

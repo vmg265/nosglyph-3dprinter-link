@@ -131,7 +131,7 @@ fun OnboardingScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "BAMBU GLYPH // ONBOARDING",
+                text = "GLYPH MONITOR // ONBOARDING",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontFamily = FontFamily.Monospace,
                     letterSpacing = 2.sp,
@@ -238,7 +238,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
             )
         )
         Text(
-            text = "BAMBU LAB X2D INTEGRATION",
+            text = "PRINT STATUS TELEMETRY",
             style = MaterialTheme.typography.titleMedium.copy(
                 fontFamily = FontFamily.Monospace,
                 color = NothingRed
@@ -248,7 +248,7 @@ private fun WelcomeStep(onNext: () -> Unit) {
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Synchronize live telemetry from your Bambu 3D printer directly onto the rear Glyph Matrix of your Nothing Phone (3) and Nothing Phone (4a) Pro.",
+            text = "Synchronize live telemetry from your 3D printer directly onto the rear Glyph Matrix of your Nothing Phone (3) and Nothing Phone (4a) Pro.",
             style = MaterialTheme.typography.bodyMedium.copy(
                 lineHeight = 22.sp,
                 color = TextSecondary
@@ -441,54 +441,12 @@ private fun DeviceConfigStep(
             )
         )
         Text(
-            text = "BAMBU X2D CREDENTIALS",
+            text = "PRINTER CREDENTIALS",
             style = MaterialTheme.typography.titleSmall.copy(
                 fontFamily = FontFamily.Monospace,
                 color = TextSecondary
             )
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Demo Mode Switch Card
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(CardDark)
-                .border(1.dp, if (mockMode) NothingRed else BorderDark, RoundedCornerShape(8.dp))
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "DEMO / MOCK MODE",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = if (mockMode) NothingRed else TextPrimary
-                        )
-                    )
-                    Text(
-                        text = "Test all Glyph states and animations immediately without connecting to a physical printer.",
-                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                    )
-                }
-
-                Switch(
-                    checked = mockMode,
-                    onCheckedChange = onMockModeChange,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = NothingWhite,
-                        checkedTrackColor = NothingRed
-                    )
-                )
-            }
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
