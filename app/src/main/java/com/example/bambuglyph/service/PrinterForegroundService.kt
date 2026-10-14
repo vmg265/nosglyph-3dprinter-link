@@ -1,13 +1,10 @@
 package com.example.bambuglyph.service
 
 import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -20,7 +17,6 @@ import com.example.bambuglyph.data.PreferencesManager
 import com.example.bambuglyph.data.PrinterRepository
 import com.example.bambuglyph.glyph.GlyphController
 import com.example.bambuglyph.model.PrintState
-import com.example.bambuglyph.mqtt.BambuMockClient
 import com.example.bambuglyph.mqtt.BambuMqttClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,13 +28,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class PrinterForegroundService : Service() {
-    private val tag = "PrinterFgService"
-    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private val tag = "PrinterForegroundService"
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var glyphController: GlyphController? = null
     private var mqttClient: BambuMqttClient? = null
-    private var mockClient: BambuMockClient? = null
+
     private var renderJob: Job? = null
     private var statusCollectorJob: Job? = null
 
@@ -57,17 +55,6 @@ class PrinterForegroundService : Service() {
                 stopSelf()
                 return START_NOT_STICKY
             }
-            ACTION_SET_DEMO_STATE -> {
-                val stateName = intent?.getStringExtra(EXTRA_DEMO_STATE)
-                if (stateName != null) {
-                    try {
-                        val state = PrintState.valueOf(stateName)
-                        mockClient?.setDemoState(state)
-                    } catch (e: Exception) {
-                        Log.w(tag, "Unknown state: $stateName")
-                    }
-                }
-            }
             ACTION_START -> {
                 startForegroundWithNotification()
                 startMonitoring()
@@ -82,29 +69,26 @@ class PrinterForegroundService : Service() {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "BambuGlyph:MonitorWakeLock"
+                "Glyph3DMonitor:ForegroundWakeLock"
             ).apply {
                 setReferenceCounted(false)
-                acquire(12 * 60 * 60 * 1000L) // 12 hours timeout max
+                acquire(12 * 60 * 60 * 1000L) // 12 hours max
             }
-            Log.i(tag, "Partial WakeLock acquired for screen-off execution")
+            Log.i(tag, "WakeLock acquired")
         } catch (e: Exception) {
-            Log.w(tag, "Failed to acquire WakeLock: ${e.message}")
+            Log.e(tag, "Failed to acquire wake lock", e)
         }
     }
 
-    private fun startForegroundWithNotification() {
-        val notification = buildNotification("Starting 3D printer monitor...")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+                Log.i(tag, "WakeLock released")
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to release wake lock", e)
         }
-        PrinterRepository.updateServiceRunning(true)
     }
 
     private fun initGlyph() {
@@ -118,22 +102,10 @@ class PrinterForegroundService : Service() {
         val config = prefs.getPrinterConfig()
         PrinterRepository.updateConfig(config)
 
-        if (config.mockMode) {
-            Log.i(tag, "Starting Mock Demo client")
-            mqttClient?.disconnect()
-            mqttClient = null
-
-            mockClient = BambuMockClient(serviceScope).apply {
-                start()
-            }
-        } else {
-            Log.i(tag, "Starting live Bambu MQTT client for ${config.ipAddress}")
-            mockClient?.stop()
-            mockClient = null
-
-            mqttClient = BambuMqttClient(config, serviceScope).apply {
-                connect()
-            }
+        Log.i(tag, "Starting MQTT client for ${config.ipAddress}")
+        mqttClient?.disconnect()
+        mqttClient = BambuMqttClient(config, serviceScope).apply {
+            connect()
         }
 
         // Start render loop
@@ -143,44 +115,54 @@ class PrinterForegroundService : Service() {
         statusCollectorJob?.cancel()
         statusCollectorJob = serviceScope.launch {
             PrinterRepository.status.collect { status ->
-                updateNotification(status.statusMessage)
+                val notification = buildNotification(status)
+                val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                notificationManager.notify(NOTIFICATION_ID, notification)
             }
         }
+
+        PrinterRepository.updateServiceRunning(true)
     }
 
     private fun startRenderLoop() {
         renderJob?.cancel()
-        renderJob = serviceScope.launch(Dispatchers.Default) {
+        renderJob = serviceScope.launch {
+            Log.i(tag, "Starting Glyph Matrix animation render loop")
             var phase = 0.0
-            val startTime = System.currentTimeMillis()
 
             while (isActive) {
-                val status = PrinterRepository.status.value
-                val elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000.0
-                phase = elapsedSeconds * 2.0 * Math.PI
+                val currentStatus = PrinterRepository.status.value
+                glyphController?.renderFrame(currentStatus, phase)
 
-                // Render to Glyph Matrix
-                glyphController?.renderFrame(status, phase)
-
-                // High framerate (25 FPS / 40ms) when breathing checkmark or preheat pulse, otherwise 1000ms
-                val intervalMs = when (status.printState) {
-                    PrintState.COMPLETED -> 40L
-                    PrintState.PREHEAT -> 80L
-                    else -> 1000L
-                }
-
-                delay(intervalMs)
+                // ~20-25 FPS loop (40ms) for smooth breathing/pulsing
+                phase += 0.04
+                if (phase > 1000.0) phase = 0.0
+                delay(40L)
             }
         }
     }
 
-    private fun buildNotification(text: String): Notification {
+    private fun startForegroundWithNotification() {
+        val notification = buildNotification(PrinterRepository.status.value)
+        startForeground(NOTIFICATION_ID, notification)
+    }
+
+    private fun buildNotification(status: com.example.bambuglyph.model.PrinterStatus): Notification {
         val pendingIntent = PendingIntent.getActivity(
             this,
             0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+
+        val text = when (status.printState) {
+            PrintState.PREHEAT -> "Preheating (PH) • ${status.nozzleTemp.toInt()}°C"
+            PrintState.PRINTING -> "${status.percent}% • ${status.remainingMinutes}m left • ${status.subtaskName}"
+            PrintState.PAUSED -> "Paused (||) at ${status.percent}%"
+            PrintState.COMPLETED -> "Print Finished (100%)"
+            PrintState.FAILED -> "Print Error / Interrupted"
+            PrintState.IDLE -> if (status.isConnected) "Printer Online • Standby" else "Connecting to 3D Printer..."
+        }
 
         return NotificationCompat.Builder(this, BambuGlyphApp.CHANNEL_ID)
             .setContentTitle("3D Printer Glyph Monitor")
@@ -193,11 +175,6 @@ class PrinterForegroundService : Service() {
             .build()
     }
 
-    private fun updateNotification(text: String) {
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, buildNotification(text))
-    }
-
     override fun onDestroy() {
         Log.i(tag, "Service onDestroy")
         renderJob?.cancel()
@@ -205,12 +182,8 @@ class PrinterForegroundService : Service() {
         serviceScope.cancel()
 
         mqttClient?.disconnect()
-        mockClient?.stop()
         glyphController?.destroy()
-
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
+        releaseWakeLock()
 
         PrinterRepository.updateServiceRunning(false)
         super.onDestroy()
@@ -222,8 +195,6 @@ class PrinterForegroundService : Service() {
         const val NOTIFICATION_ID = 23112
         const val ACTION_START = "com.example.bambuglyph.action.START"
         const val ACTION_STOP = "com.example.bambuglyph.action.STOP"
-        const val ACTION_SET_DEMO_STATE = "com.example.bambuglyph.action.SET_DEMO_STATE"
-        const val EXTRA_DEMO_STATE = "extra_demo_state"
 
         fun start(context: Context) {
             val intent = Intent(context, PrinterForegroundService::class.java).apply {
@@ -239,14 +210,6 @@ class PrinterForegroundService : Service() {
         fun stop(context: Context) {
             val intent = Intent(context, PrinterForegroundService::class.java).apply {
                 action = ACTION_STOP
-            }
-            context.startService(intent)
-        }
-
-        fun setDemoState(context: Context, state: PrintState) {
-            val intent = Intent(context, PrinterForegroundService::class.java).apply {
-                action = ACTION_SET_DEMO_STATE
-                putExtra(EXTRA_DEMO_STATE, state.name)
             }
             context.startService(intent)
         }

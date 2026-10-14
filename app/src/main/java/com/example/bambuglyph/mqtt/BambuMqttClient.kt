@@ -197,7 +197,6 @@ class BambuMqttClient(
 
             val updated = current.copy(
                 isConnected = true,
-                isMockMode = false,
                 gcodeState = gcodeState,
                 printState = printState,
                 remainingMinutes = remainingMinutes,

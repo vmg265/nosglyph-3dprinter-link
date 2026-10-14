@@ -83,22 +83,8 @@ class PrinterGlyphToyService : Service() {
     }
 
     private fun handleGlyphButtonLongPress() {
-        val status = PrinterRepository.status.value
-        if (status.isMockMode) {
-            // In demo mode: cycle state
-            val next = when (status.printState) {
-                PrintState.IDLE -> PrintState.PREHEAT
-                PrintState.PREHEAT -> PrintState.PRINTING
-                PrintState.PRINTING -> PrintState.PAUSED
-                PrintState.PAUSED -> PrintState.COMPLETED
-                PrintState.COMPLETED -> PrintState.IDLE
-                PrintState.FAILED -> PrintState.IDLE
-            }
-            PrinterForegroundService.setDemoState(applicationContext, next)
-        } else {
-            // Re-render
-            renderCurrentStatus()
-        }
+        // Refresh and re-render frame on physical button long press
+        renderCurrentStatus()
     }
 
     private fun cleanupToy() {

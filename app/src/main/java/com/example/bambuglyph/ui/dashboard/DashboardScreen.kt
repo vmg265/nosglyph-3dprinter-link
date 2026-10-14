@@ -19,10 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -35,10 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -51,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +53,6 @@ import androidx.compose.ui.unit.sp
 import com.example.bambuglyph.data.PreferencesManager
 import com.example.bambuglyph.data.PrinterRepository
 import com.example.bambuglyph.glyph.GlyphMatrixRenderer
-import com.example.bambuglyph.model.GlyphDeviceType
 import com.example.bambuglyph.model.PrintState
 import com.example.bambuglyph.model.PrinterConfig
 import com.example.bambuglyph.service.PrinterForegroundService
@@ -98,14 +90,7 @@ fun DashboardScreen(
     var showSettingsSheet by remember { mutableStateOf(false) }
     var previewSizeOverride by remember { mutableStateOf<Int?>(null) }
 
-    // 5-tap hidden demo mode toggle in header
-    var headerTapCount by remember { mutableStateOf(0) }
-    var lastTapTime by remember { mutableStateOf(0L) }
-    var demoUnlocked by remember { mutableStateOf(config.mockMode) }
-    var feedbackMsg by remember { mutableStateOf<String?>(null) }
-
     val activeSize = previewSizeOverride ?: matrixSize
-    // If override changed size, generate preview frame
     val displayFrame = if (previewSizeOverride != null && previewSizeOverride != matrixSize) {
         remember(status, activeSize) {
             GlyphMatrixRenderer.render(status, activeSize)
@@ -124,35 +109,13 @@ fun DashboardScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Top Bar
+            // Clean Production Top Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier.clickable {
-                        val now = System.currentTimeMillis()
-                        if (now - lastTapTime > 2000L) {
-                            headerTapCount = 0
-                        }
-                        lastTapTime = now
-                        headerTapCount++
-                        if (headerTapCount >= 5) {
-                            headerTapCount = 0
-                            val newMode = !demoUnlocked
-                            demoUnlocked = newMode
-                            val updated = config.copy(mockMode = newMode)
-                            prefs.savePrinterConfig(updated)
-                            PrinterRepository.updateConfig(updated)
-                            feedbackMsg = if (newMode) "DEMO MODE UNLOCKED" else "DEMO MODE DISABLED"
-                            if (isRunning) {
-                                PrinterForegroundService.stop(context)
-                                PrinterForegroundService.start(context)
-                            }
-                        }
-                    }
-                ) {
+                Column {
                     Text(
                         text = "3D PRINTER",
                         style = MaterialTheme.typography.titleLarge.copy(
@@ -162,30 +125,16 @@ fun DashboardScreen(
                         )
                     )
                     Text(
-                        text = if (demoUnlocked) "DEMO SIMULATOR" else if (config.serialNumber.isNotBlank()) config.serialNumber else "MONITOR",
+                        text = if (config.serialNumber.isNotBlank()) config.serialNumber else "PRINT MONITOR",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = FontFamily.Monospace,
-                            color = if (demoUnlocked) NothingRed else TextMuted
+                            color = TextMuted
                         )
                     )
-                    if (feedbackMsg != null) {
-                        Text(
-                            text = feedbackMsg ?: "",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                color = NothingRed,
-                                letterSpacing = 1.sp
-                            )
-                        )
-                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Status Badge
-                    ConnectionBadge(
-                        isConnected = status.isConnected,
-                        isMock = demoUnlocked
-                    )
+                    ConnectionBadge(isConnected = status.isConnected)
 
                     Spacer(modifier = Modifier.width(8.dp))
 
@@ -310,19 +259,6 @@ fun DashboardScreen(
                 modifier = Modifier.padding(horizontal = 4.dp)
             )
 
-            // Demo / Test States Section (Hidden by default; unlocked by tapping header 5 times)
-            if (demoUnlocked) {
-                Spacer(modifier = Modifier.height(24.dp))
-                DemoTestSection(
-                    onSelectState = { state ->
-                        if (!isRunning) {
-                            PrinterForegroundService.start(context)
-                        }
-                        PrinterForegroundService.setDemoState(context, state)
-                    }
-                )
-            }
-
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -341,7 +277,6 @@ fun DashboardScreen(
                 onSave = { updated ->
                     prefs.savePrinterConfig(updated)
                     PrinterRepository.updateConfig(updated)
-                    // If service running, restart it with new config
                     if (isRunning) {
                         PrinterForegroundService.stop(context)
                         PrinterForegroundService.start(context)
@@ -360,11 +295,11 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun ConnectionBadge(isConnected: Boolean, isMock: Boolean) {
-    val (color, text) = when {
-        isMock -> StatusAmber to "DEMO"
-        isConnected -> StatusGreen to "ONLINE"
-        else -> TextMuted to "OFFLINE"
+private fun ConnectionBadge(isConnected: Boolean) {
+    val (color, text) = if (isConnected) {
+        StatusGreen to "ONLINE"
+    } else {
+        TextMuted to "OFFLINE"
     }
 
     Row(
@@ -409,7 +344,6 @@ private fun PrintStateCard(status: com.example.bambuglyph.model.PrinterStatus) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // State Badge
                 val (badgeColor, badgeText) = when (status.printState) {
                     PrintState.PREHEAT -> NothingRed to "PREHEAT [PH]"
                     PrintState.PRINTING -> StatusBlue to "PRINTING"
@@ -438,7 +372,6 @@ private fun PrintStateCard(status: com.example.bambuglyph.model.PrinterStatus) {
                     }
                 }
 
-                // Remaining Time
                 Text(
                     text = if (status.printState == PrintState.PRINTING || status.printState == PrintState.PREHEAT)
                         "${status.remainingMinutes}m REMAINING"
@@ -454,7 +387,6 @@ private fun PrintStateCard(status: com.example.bambuglyph.model.PrinterStatus) {
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Subtask Name
             Text(
                 text = if (status.subtaskName.isNotBlank()) status.subtaskName else "3d_model.gcode",
                 style = MaterialTheme.typography.bodyMedium.copy(
@@ -465,7 +397,6 @@ private fun PrintStateCard(status: com.example.bambuglyph.model.PrinterStatus) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Progress Bar
             LinearProgressIndicator(
                 progress = { (status.percent / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier
@@ -564,103 +495,6 @@ private fun TelemetryCard(label: String, current: String, target: String, modifi
 }
 
 @Composable
-private fun DemoTestSection(onSelectState: (PrintState) -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(CardDark)
-            .border(1.dp, BorderDark, RoundedCornerShape(12.dp))
-            .padding(16.dp)
-    ) {
-        Column {
-            Text(
-                text = "INTERACTIVE GLYPH TEST CONTROLS",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = NothingRed
-                )
-            )
-            Text(
-                text = "Tap any state to immediately display its dot-matrix LED pattern on rear hardware and simulator:",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = TextSecondary,
-                    lineHeight = 16.sp
-                )
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DemoButton("PH", "PREHEAT", Modifier.weight(1f)) {
-                    onSelectState(PrintState.PREHEAT)
-                }
-                DemoButton("75%", "PRINT", Modifier.weight(1f)) {
-                    onSelectState(PrintState.PRINTING)
-                }
-                DemoButton("||", "PAUSE", Modifier.weight(1f)) {
-                    onSelectState(PrintState.PAUSED)
-                }
-                DemoButton("TICK", "100%", Modifier.weight(1f)) {
-                    onSelectState(PrintState.COMPLETED)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                DemoButton("IDLE", "STANDBY", Modifier.weight(1f)) {
-                    onSelectState(PrintState.IDLE)
-                }
-                DemoButton("ERR", "FAILED", Modifier.weight(1f)) {
-                    onSelectState(PrintState.FAILED)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DemoButton(tag: String, label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(NothingBlack)
-            .border(1.dp, BorderDark, RoundedCornerShape(6.dp))
-            .clickable { onClick() }
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = tag,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = NothingRed
-                )
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp,
-                    color = TextSecondary
-                )
-            )
-        }
-    }
-}
-
-@Composable
 private fun SizePill(label: String, isSelected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
@@ -691,7 +525,6 @@ private fun SettingsSheetContent(
     var serial by remember { mutableStateOf(currentConfig.serialNumber) }
     var code by remember { mutableStateOf(currentConfig.accessCode) }
     var deviceType by remember { mutableStateOf(currentConfig.deviceType) }
-    var mockMode by remember { mutableStateOf(currentConfig.mockMode) }
 
     Column(
         modifier = Modifier
@@ -757,8 +590,7 @@ private fun SettingsSheetContent(
                         port = port.toIntOrNull() ?: 8883,
                         serialNumber = serial.trim(),
                         accessCode = code.trim(),
-                        deviceType = deviceType,
-                        mockMode = mockMode
+                        deviceType = deviceType
                     )
                 )
             },

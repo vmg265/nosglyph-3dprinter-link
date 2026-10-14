@@ -93,7 +93,6 @@ fun OnboardingScreen(
     var serialNumber by remember { mutableStateOf("01P00A000000000") }
     var accessCode by remember { mutableStateOf("12345678") }
     var selectedDeviceType by remember { mutableStateOf(GlyphDeviceType.AUTO_DETECT) }
-    var mockMode by remember { mutableStateOf(false) }
 
     // Permission states
     var hasNotificationPermission by remember {
@@ -204,16 +203,13 @@ fun OnboardingScreen(
                 onAccessCodeChange = { accessCode = it },
                 deviceType = selectedDeviceType,
                 onDeviceTypeChange = { selectedDeviceType = it },
-                mockMode = mockMode,
-                onMockModeChange = { mockMode = it },
                 onComplete = {
                     val config = PrinterConfig(
                         ipAddress = ipAddress.trim(),
                         port = port.toIntOrNull() ?: 8883,
                         serialNumber = serialNumber.trim(),
                         accessCode = accessCode.trim(),
-                        deviceType = selectedDeviceType,
-                        mockMode = mockMode
+                        deviceType = selectedDeviceType
                     )
                     prefs.savePrinterConfig(config)
                     prefs.isOnboardingCompleted = true
@@ -425,8 +421,6 @@ private fun DeviceConfigStep(
     onAccessCodeChange: (String) -> Unit,
     deviceType: GlyphDeviceType,
     onDeviceTypeChange: (GlyphDeviceType) -> Unit,
-    mockMode: Boolean,
-    onMockModeChange: (Boolean) -> Unit,
     onComplete: () -> Unit
 ) {
     var showPassword by remember { mutableStateOf(false) }

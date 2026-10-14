@@ -13,25 +13,23 @@ class PreferencesManager(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
 
     fun getPrinterConfig(): PrinterConfig {
-        val ip = prefs.getString(KEY_IP, "192.168.1.100") ?: "192.168.1.100"
+        val ip = prefs.getString(KEY_IP, "") ?: ""
         val port = prefs.getInt(KEY_PORT, 8883)
-        val serial = prefs.getString(KEY_SERIAL, "01P00A000000000") ?: "01P00A000000000"
-        val code = prefs.getString(KEY_CODE, "12345678") ?: "12345678"
+        val serial = prefs.getString(KEY_SERIAL, "") ?: ""
+        val code = prefs.getString(KEY_CODE, "") ?: ""
         val typeName = prefs.getString(KEY_DEVICE_TYPE, GlyphDeviceType.AUTO_DETECT.name) ?: GlyphDeviceType.AUTO_DETECT.name
         val deviceType = try {
             GlyphDeviceType.valueOf(typeName)
         } catch (_: Exception) {
             GlyphDeviceType.AUTO_DETECT
         }
-        val mockMode = prefs.getBoolean(KEY_MOCK_MODE, false)
 
         return PrinterConfig(
             ipAddress = ip,
             port = port,
             serialNumber = serial,
             accessCode = code,
-            deviceType = deviceType,
-            mockMode = mockMode
+            deviceType = deviceType
         )
     }
 
@@ -42,7 +40,6 @@ class PreferencesManager(context: Context) {
             .putString(KEY_SERIAL, config.serialNumber)
             .putString(KEY_CODE, config.accessCode)
             .putString(KEY_DEVICE_TYPE, config.deviceType.name)
-            .putBoolean(KEY_MOCK_MODE, config.mockMode)
             .apply()
     }
 
@@ -54,6 +51,5 @@ class PreferencesManager(context: Context) {
         private const val KEY_SERIAL = "printer_serial"
         private const val KEY_CODE = "printer_code"
         private const val KEY_DEVICE_TYPE = "device_type"
-        private const val KEY_MOCK_MODE = "mock_mode"
     }
 }
