@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <!-- Background circle / glyph border -->
+    <path
+        android:fillColor="#FF111111"
+        android:pathData="M64,64m-60,0a60,60 0,1,1 120,0a60,60 0,1,1 -120,0" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M64,64m-56,0a56,56 0,1,1 112,0a56,56 0,1,1 -112,0" />
+
+    <!-- 3D Printer Nozzle and Bed representation in dot-matrix style -->
+    <!-- Extruder carriage -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48,34 h32 v10 h-32 z" />
+    <!-- Nozzle cone -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M56,44 h16 l-8,14 z" />
+    <!-- Filament dot -->
+    <path
+        android:fillColor="#FFD71920"
+        android:pathData="M62,60 h4 v4 h-4 z" />
+    <!-- Printed layers -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M44,66 h40 v4 h-40 z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40,72 h48 v4 h-48 z" />
+    <!-- Print bed -->
+    <path
+        android:fillColor="#FF888888"
+        android:pathData="M32,80 h64 v6 h-64 z" />
+    <!-- Bed mount -->
+    <path
+        android:fillColor="#FF555555"
+        android:pathData="M56,86 h16 v12 h-16 z" />
+</vector>
